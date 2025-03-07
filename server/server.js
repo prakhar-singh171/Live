@@ -7,7 +7,7 @@ const mongoose = require("mongoose");
 const cors = require("cors");
 
 // Import chat and poll controller functions
-const { joinRoom, sendMessage, updateMessage, deleteMessage } = require("./controllers/chatController");
+const { joinRoom, sendMessage, updateMessage, deleteMessage,markMessagesSeen } = require("./controllers/chatController");
 const { createPoll, votePoll,getPollsByRoom } = require("./controllers/pollController");
 
 const app = express();
@@ -37,6 +37,17 @@ io.on("connection", (socket) => {
       console.error("Error fetching poll history:", error);
     }
   });
+
+  socket.on("chat_history", (history) => {
+    console.log("🔍 Server sent chat history:", history);
+  });
+
+  socket.on("mark_seen", async (data) => {
+    console.log("Received markMessagesSeen event from client:", data);
+    await markMessagesSeen(socket, data, io);
+  });
+  
+  
   
   socket.on("send_message", async (data) => {
     await sendMessage(socket, data, io);

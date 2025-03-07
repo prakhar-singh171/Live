@@ -34,27 +34,25 @@ export default function ChatApp() {
       setEvents((prev) => sortEvents([...prev, event]));
     };
 
-    const handleChatHistory = (history) => {
-      console.log("📜 Received chat history:", history);
-      const chatEvents = history.map((msg) => ({
-        ...msg,
-        type: "chat",
-        createdAt: msg.createdAt ? msg.createdAt : Date.now(),
-      }));
-      setEvents(chatEvents);
-    };
-
+   
     // Poll event handlers
     const handlePollHistory = (polls) => {
       console.log("📝 Received poll history:", polls);
-      const pollEvents = polls.map((poll) => ({
-        ...poll,
-        type: "poll",
-        createdAt: poll.createdAt ? poll.createdAt : Date.now(),
-      }));
-      setEvents((prev) => sortEvents([...prev, ...pollEvents]));
+    
+      setEvents((prev) => {
+        const merged = [...prev, ...polls.map(poll => ({
+          ...poll,
+          type: "poll",
+          createdAt: poll.createdAt ? poll.createdAt : Date.now(),
+        }))];
+    
+        // Remove duplicates based on _id
+        const uniqueEvents = Array.from(new Map(merged.map(event => [event._id, event])).values());
+    
+        return uniqueEvents;
+      });
     };
-
+    
     const handlePollCreated = (newPoll) => {
       console.log("📝 Poll created:", newPoll);
       const pollEvent = {
@@ -75,6 +73,24 @@ export default function ChatApp() {
         )
       );
     };
+
+    const handleChatHistory = (history) => {
+      console.log("📜 Received chat history:", history);
+    
+      setEvents((prev) => {
+        const merged = [...prev, ...history.map(msg => ({
+          ...msg,
+          type: "chat",
+          createdAt: msg.createdAt ? msg.createdAt : Date.now(),
+        }))];
+    
+        // Remove duplicates based on _id
+        const uniqueEvents = Array.from(new Map(merged.map(event => [event._id, event])).values());
+    
+        return uniqueEvents;
+      });
+    };
+    
 
     // Message update and delete handlers
     const handleMessageUpdated = (data) => {
