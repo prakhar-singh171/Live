@@ -6,17 +6,16 @@ const { Server } = require("socket.io");
 const mongoose = require("mongoose");
 const cors = require("cors");
 
-// Import controller functions
-const { joinRoom, sendMessage, updateMessage, deleteMessage, markMessagesSeen } = require("./controllers/chatController");
+// Import chat and poll controller functions
+const { joinRoom, sendMessage, updateMessage, deleteMessage } = require("./controllers/chatController");
+const { createPoll, votePoll,getPollsByRoom } = require("./controllers/pollController");
 
 const app = express();
 app.use(cors({ origin: "*", methods: ["GET", "POST"] }));
 app.use(express.json());
 
-// Create HTTP server
+// Create HTTP server and initialize Socket.io
 const server = http.createServer(app);
-
-// Initialize Socket.io
 const io = new Server(server, { cors: { origin: "*", methods: ["GET", "POST"] } });
 
 // Connect to MongoDB
@@ -28,27 +27,35 @@ mongoose.connect(process.env.MONGODB_URI, { useNewUrlParser: true, useUnifiedTop
 io.on("connection", (socket) => {
   console.log(`✅ User connected: ${socket.id}`);
 
+  // Chat events
   socket.on("join_room", async (data) => {
     await joinRoom(socket, data);
-    // Optionally, immediately mark all messages as seen upon joining:
-    await markMessagesSeen(socket, { room: data.room, username: data.username }, io);
+    try {
+      const polls = await getPollsByRoom(data.room);
+      socket.emit("poll_history", polls);
+    } catch (error) {
+      console.error("Error fetching poll history:", error);
+    }
   });
-
+  
   socket.on("send_message", async (data) => {
     await sendMessage(socket, data, io);
   });
-
   socket.on("update_message", async (data) => {
     await updateMessage(socket, data, io);
   });
-
   socket.on("delete_message", async (data) => {
     await deleteMessage(socket, data, io);
   });
 
-  // NEW: When a user marks messages as seen (could be triggered later)
-  socket.on("mark_seen", async (data) => {
-    await markMessagesSeen(socket, data, io);
+  // Poll events
+  socket.on("create_poll", async (data) => {
+    // data should include: { room, question, options }
+    await createPoll(socket, data, io);
+  });
+  socket.on("vote_poll", async (data) => {
+    // data should include: { pollId, option, username }
+    await votePoll(socket, data, io);
   });
 
   socket.on("disconnect", () => {
@@ -56,6 +63,6 @@ io.on("connection", (socket) => {
   });
 });
 
-// Start server
+// Start the server
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
