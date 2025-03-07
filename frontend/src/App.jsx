@@ -379,24 +379,22 @@ function ChatMessage({ message, username, updateMessage, deleteMessage }) {
 // Component for displaying a poll and voting
 function PollComponent({ poll, votePoll, username }) {
   const [selectedOption, setSelectedOption] = useState("");
-  const [hasVoted, setHasVoted] = useState(false);
 
   // Ensure poll.options is always an array
   const options = Array.isArray(poll.options) ? poll.options : [];
 
+  // Check if the user has already voted
+  const userHasVoted = options.some(opt => opt.votedBy?.includes(username));
+
   const handleVote = () => {
-    if (!hasVoted) {
-      if (selectedOption) {
-        const payload = { pollId: poll._id, option: selectedOption, username };
-        console.log("Emitting vote_poll with:", payload);
-        votePoll(payload); // Ensure votePoll is correctly used
-        setHasVoted(true);
-      } else {
-        alert("Please select an option.");
-      }
-    } else {
-      alert("You have already voted.");
+    if (!selectedOption) {
+      alert("Please select an option.");
+      return;
     }
+
+    const payload = { pollId: poll._id, option: selectedOption, username };
+    console.log("Emitting vote_poll with:", payload);
+    votePoll(payload);
   };
 
   return (
@@ -408,27 +406,36 @@ function PollComponent({ poll, votePoll, username }) {
       <ul>
         {options.map((opt, idx) => (
           <li key={opt._id || idx} className="flex items-center mt-2">
-            <input
-              type="radio"
-              name={`poll-${poll._id}`}
-              value={opt.option}
-              onChange={(e) => setSelectedOption(e.target.value)}
-              disabled={hasVoted}
-              className="mr-2"
-            />
+            {!userHasVoted && (
+              <input
+                type="radio"
+                name={`poll-${poll._id}`}
+                value={opt.option}
+                onChange={(e) => setSelectedOption(e.target.value)}
+                className="mr-2"
+              />
+            )}
             <span>
               {opt.option} ({opt.votes} votes)
             </span>
           </li>
         ))}
       </ul>
-      <button
-        className="mt-2 bg-blue-500 text-white px-4 py-2 rounded"
-        onClick={handleVote}
-        disabled={hasVoted}
-      >
-        {hasVoted ? "Voted" : "Vote"}
-      </button>
+
+      {!userHasVoted && (
+        <button
+          className="mt-2 bg-blue-500 text-white px-4 py-2 rounded"
+          onClick={handleVote}
+        >
+          Vote
+        </button>
+      )}
+
+      {userHasVoted && (
+        <div className="mt-2 text-green-600 font-semibold">
+          You have already voted.
+        </div>
+      )}
     </div>
   );
 }
