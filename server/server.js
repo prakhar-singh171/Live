@@ -1,61 +1,61 @@
+// server.js
 require("dotenv").config();
 const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
+const mongoose = require("mongoose");
 const cors = require("cors");
-const connectDB = require("./config/db");
-const chatRoutes = require("./routes/chatRoutes");
-const Chat = require("./models/chatModel");
 
-// Initialize app
+// Import controller functions
+const { joinRoom, sendMessage, updateMessage, deleteMessage, markMessagesSeen } = require("./controllers/chatController");
+
 const app = express();
-const server = http.createServer(app);
-const io = new Server(server, {
-  cors: { origin: "*", methods: ["GET", "POST"] },
-});
-
-// Middleware
-app.use(cors());
+app.use(cors({ origin: "*", methods: ["GET", "POST"] }));
 app.use(express.json());
 
+// Create HTTP server
+const server = http.createServer(app);
+
+// Initialize Socket.io
+const io = new Server(server, { cors: { origin: "*", methods: ["GET", "POST"] } });
+
 // Connect to MongoDB
-connectDB();
+mongoose.connect(process.env.MONGODB_URI, { useNewUrlParser: true, useUnifiedTopology: true })
+  .then(() => console.log("✅ Connected to MongoDB"))
+  .catch(err => console.error("❌ MongoDB connection error:", err));
 
-// API Routes
-app.use("/api/chat", chatRoutes);
-
-// WebSocket Logic
+// Socket.io connection
 io.on("connection", (socket) => {
-  console.log(`✅ New connection: ${socket.id}`);
+  console.log(`✅ User connected: ${socket.id}`);
 
-  socket.on("join_room", async ({ room, username }) => {
-    socket.join(room);
-    console.log(`👥 ${username} joined room: ${room}`);
-
-    // Fetch chat history
-    const chatHistory = await Chat.find({ room }).sort({ _id: 1 });
-    socket.emit("chat_history", chatHistory);
+  socket.on("join_room", async (data) => {
+    await joinRoom(socket, data);
+    // Optionally, immediately mark all messages as seen upon joining:
+    await markMessagesSeen(socket, { room: data.room, username: data.username }, io);
   });
 
   socket.on("send_message", async (data) => {
-    const { room, username, text } = data;
-    const timestamp = new Date().toLocaleTimeString();
-  
-    const newMessage = new Chat({ room, username, text, timestamp });
-    await newMessage.save();
-  
-    console.log(`💬 ${username} sent: ${text} in room ${room}`);
-  
-    // Emit message only once
-    io.to(room).emit("receive_message", { room, username, text, timestamp });
+    await sendMessage(socket, data, io);
   });
-  
+
+  socket.on("update_message", async (data) => {
+    await updateMessage(socket, data, io);
+  });
+
+  socket.on("delete_message", async (data) => {
+    await deleteMessage(socket, data, io);
+  });
+
+  // NEW: When a user marks messages as seen (could be triggered later)
+  socket.on("mark_seen", async (data) => {
+    await markMessagesSeen(socket, data, io);
+  });
 
   socket.on("disconnect", () => {
     console.log(`❌ User disconnected: ${socket.id}`);
   });
 });
 
-// Start Server
+// Start server
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
